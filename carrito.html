@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TecnoStore - Carrito de Compras</title>
+</head>
+<body>
+    <header>
+        <h1>TecnoStore</h1>
+        <p>Carrito de Compras</p>
+    </header>
+
+    <nav>
+        <a href="index.html">Inicio</a> |
+        <a href="productos.html">Productos</a> |
+        <a href="carrito.html">Carrito de Compras</a> |
+        <a href="registro.html">Crear Cuenta</a> |
+        <a href="contacto.html">Contacto</a>
+    </nav>
+
+    <hr>
+
+    <main>
+        <h2>Mi carrito</h2>
+
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio unitario</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Laptop TecnoPro 15"</td>
+                    <td>1</td>
+                    <td>Q 6,500.00</td>
+                    <td>Q 6,500.00</td>
+                </tr>
+                <tr>
+                    <td>Mouse Inalambrico X200</td>
+                    <td>2</td>
+                    <td>Q 150.00</td>
+                    <td>Q 300.00</td>
+                </tr>
+                <tr>
+                    <td>Audifonos Bluetooth SoundMax</td>
+                    <td>1</td>
+                    <td>Q 275.00</td>
+                    <td>Q 275.00</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3">Total estimado</th>
+                    <th>Q 7,075.00</th>
+                </tr>
+            </tfoot>
+        </table>
+
+        <h3>Finalizar compra (prototipo)</h3>
+        <form action="#" method="post">
+            <fieldset>
+                <legend>Datos de envio</legend>
+
+                <label for="nombre_envio">Nombre completo:</label><br>
+                <input type="text" id="nombre_envio" name="nombre_envio" required><br><br>
+
+                <label for="direccion">Direccion de envio:</label><br>
+                <textarea id="direccion" name="direccion" rows="3" cols="40"></textarea><br><br>
+
+                <label for="telefono">Telefono:</label><br>
+                <input type="tel" id="telefono" name="telefono"><br><br>
+            </fieldset>
+
+            <fieldset>
+                <legend>Metodo de pago</legend>
+
+                <input type="radio" id="tarjeta" name="metodo_pago" value="tarjeta" checked>
+                <label for="tarjeta">Tarjeta de credito/debito</label><br>
+
+                <input type="radio" id="contra_entrega" name="metodo_pago" value="contra_entrega">
+                <label for="contra_entrega">Pago contra entrega</label><br><br>
+
+                <label for="numero_tarjeta">Numero de tarjeta (si aplica):</label><br>
+                <input type="text" id="numero_tarjeta" name="numero_tarjeta" maxlength="16"><br>
+            </fieldset>
+
+            <br>
+            <input type="submit" value="Confirmar compra">
+            <input type="reset" value="Cancelar">
+        </form>
+    </main>
+
+    <hr>
+
+    <footer>
+        <p>Pagina desarrollada por: Sergio Gualberto Morales Sanchinelli - Carnet: 9490-23-14510</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TecnoStore - Productos</title>
+</head>
+<body>
+    <header>
+        <h1>TecnoStore</h1>
+        <p>Catalogo de Productos</p>
+    </header>
+
+    <nav>
+        <a href="index.html">Inicio</a> |
+        <a href="productos.html">Productos</a> |
+        <a href="carrito.html">Carrito de Compras</a> |
+        <a href="registro.html">Crear Cuenta</a> |
+        <a href="contacto.html">Contacto</a>
+    </nav>
+
+    <hr>
+
+    <main>
+        <h2>Nuestros Productos</h2>
+        <p>Selecciona un producto para ver mas detalles.</p>
+
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Categoria</th>
+                    <th>Precio</th>
+                    <th>Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Laptop TecnoPro 15"</td>
+                    <td>Computadoras</td>
+                    <td>Q 6,500.00</td>
+                    <td><a href="producto-detalle.html">Ver detalle</a></td>
+                </tr>
+                <tr>
+                    <td>Mouse Inalambrico X200</td>
+                    <td>Accesorios</td>
+                    <td>Q 150.00</td>
+                    <td><a href="producto-detalle.html">Ver detalle</a></td>
+                </tr>
+                <tr>
+                    <td>Teclado Mecanico RGB</td>
+                    <td>Accesorios</td>
+                    <td>Q 350.00</td>
+                    <td><a href="producto-detalle.html">Ver detalle</a></td>
+                </tr>
+                <tr>
+                    <td>Smartphone Galaxy Nova</td>
+                    <td>Celulares</td>
+                    <td>Q 3,200.00</td>
+                    <td><a href="producto-detalle.html">Ver detalle</a></td>
+                </tr>
+                <tr>
+                    <td>Audifonos Bluetooth SoundMax</td>
+                    <td>Accesorios</td>
+                    <td>Q 275.00</td>
+                    <td><a href="producto-detalle.html">Ver detalle</a></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Filtrar productos (prototipo)</h3>
+        <form action="#" method="get">
+            <fieldset>
+                <legend>Busqueda y filtros</legend>
+
+                <label for="buscar">Buscar producto:</label><br>
+                <input type="text" id="buscar" name="buscar" placeholder="Ej. Laptop"><br><br>
+
+                <label for="categoria">Categoria:</label><br>
+                <select id="categoria" name="categoria">
+                    <option value="todas">Todas</option>
+                    <option value="computadoras">Computadoras</option>
+                    <option value="accesorios">Accesorios</option>
+                    <option value="celulares">Celulares</option>
+                </select><br><br>
+
+                <label for="precio_max">Precio maximo:</label><br>
+                <input type="number" id="precio_max" name="precio_max" min="0" step="1"><br><br>
+
+                <input type="submit" value="Filtrar">
+                <input type="reset" value="Limpiar">
+            </fieldset>
+        </form>
+    </main>
+
+    <hr>
+
+    <footer>
+        <p>Pagina desarrollada por: Sergio Gualberto Morales Sanchinelli - Carnet: 9490-23-14510</p>
+    </footer>
+</body>
+</html>

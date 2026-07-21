@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TecnoStore - Contacto</title>
+</head>
+<body>
+    <header>
+        <h1>TecnoStore</h1>
+        <p>Contactanos</p>
+    </header>
+
+    <nav>
+        <a href="index.html">Inicio</a> |
+        <a href="productos.html">Productos</a> |
+        <a href="carrito.html">Carrito de Compras</a> |
+        <a href="registro.html">Crear Cuenta</a> |
+        <a href="contacto.html">Contacto</a>
+    </nav>
+
+    <hr>
+
+    <main>
+        <h2>Ponte en contacto con nosotros</h2>
+        <p>¿Tienes dudas sobre un producto o tu pedido? Escribenos y te responderemos lo antes posible.</p>
+
+        <address>
+            TecnoStore<br>
+            Ciudad de Guatemala, Guatemala<br>
+            Telefono: 2222-2222<br>
+            Correo: contacto@tecnostore.com
+        </address>
+
+        <h3>Formulario de contacto (prototipo)</h3>
+        <form action="#" method="post">
+            <fieldset>
+                <legend>Informacion del remitente</legend>
+
+                <label for="nombre_contacto">Nombre completo:</label><br>
+                <input type="text" id="nombre_contacto" name="nombre_contacto" required><br><br>
+
+                <label for="correo_contacto">Correo electronico:</label><br>
+                <input type="email" id="correo_contacto" name="correo_contacto" required><br><br>
+
+                <label for="asunto">Asunto:</label><br>
+                <select id="asunto" name="asunto">
+                    <option value="soporte">Soporte tecnico</option>
+                    <option value="pedido">Estado de mi pedido</option>
+                    <option value="devolucion">Devoluciones</option>
+                    <option value="otro">Otro</option>
+                </select><br><br>
+
+                <label for="mensaje">Mensaje:</label><br>
+                <textarea id="mensaje" name="mensaje" rows="5" cols="40" required></textarea><br><br>
+            </fieldset>
+
+            <input type="submit" value="Enviar mensaje">
+            <input type="reset" value="Limpiar">
+        </form>
+
+        <h3>Siguenos</h3>
+        <ul>
+            <li><a href="https://www.facebook.com">Facebook</a></li>
+            <li><a href="https://www.instagram.com">Instagram</a></li>
+            <li><a href="https://www.x.com">Twitter / X</a></li>
+        </ul>
+    </main>
+
+    <hr>
+
+    <footer>
+        <p>Pagina desarrollada por: Sergio Gualberto Morales Sanchinelli - Carnet: 9490-23-14510</p>
+    </footer>
+</body>
+</html>
