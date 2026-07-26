@@ -3,7 +3,7 @@
 Sergio Gualberto Morales Sanchinelli
 9490-23-14510
 
-> https://lustrous-puffpuff-e7b713.netlify.app/
+> https://tarea1sgms.netlify.app/
 
 
 ## Paginas del sitio
