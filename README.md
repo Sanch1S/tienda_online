@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | Rama de esta entrega | `Tarea4` |
-| Frontend desplegado (Netlify) |  |
-| Backend desplegado (Render/Railway) | |
+| Frontend desplegado (Netlify) | https://tarea4sgms.netlify.app/ |
+| Backend desplegado (Render) |https://tienda-online-lioj.onrender.com/ |
 | Estado global | **Opción A: Context API + useReducer** |
 
 ## Descripción
