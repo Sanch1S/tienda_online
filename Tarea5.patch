@@ -1,0 +1,1003 @@
+From cec9c0d1d6fd5d12373801a7f537ea80271e6937 Mon Sep 17 00:00:00 2001
+From: Sergio Gualberto Morales Sanchinelli <sergiosanchi2003@outlook.com>
+Date: Wed, 21 Oct 2026 19:13:27 -0600
+Subject: [PATCH] =?UTF-8?q?Tarea=205:=20autenticaci=C3=B3n=20con=20JWT=20d?=
+ =?UTF-8?q?e=205=20minutos?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Backend:
+- Login firma un JWT (id, email, role) con expiración de 5 minutos
+- Middleware proteger: Bearer token, 401 token_missing / token_expired / token_invalid
+- server/.env.example con JWT_SECRET y JWT_EXPIRES_IN
+
+Frontend:
+- Cliente HTTP centralizado con inyección automática del Bearer token
+- Interceptor de 401: LOGOUT, limpia sesión, aviso y redirección a /login
+- Alert de sesión caducada en Login
+
+Docs: colección Postman y README con la explicación técnica.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01J39fYQp7AHeYz1rDK4WoBZ
+---
+ .env.example                                  |   3 +
+ README.md                                     |  60 ++-
+ .../tecnostore_tarea5.postman_collection.json | 418 ++++++++++++++++++
+ server/.env.example                           |  22 +
+ server/src/controllers/auth.controller.js     |  13 +-
+ server/src/middleware/auth.js                 |  42 +-
+ src/context/AuthContext.jsx                   |  59 ++-
+ src/pages/AdminProductos.jsx                  |  15 +-
+ src/pages/Login.jsx                           |  11 +
+ src/pages/Perfil.jsx                          |   2 +-
+ src/services/api.js                           |  44 +-
+ 11 files changed, 636 insertions(+), 53 deletions(-)
+ create mode 100644 .env.example
+ create mode 100644 docs/tecnostore_tarea5.postman_collection.json
+ create mode 100644 server/.env.example
+
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..cf85db7
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,3 @@
++# Copia este archivo a ".env" (frontend, raíz del proyecto).
++# URL del backend: en local http://localhost:5000; en producción la URL de Render/Railway.
++VITE_API_URL=http://localhost:5000
+diff --git a/README.md b/README.md
+index dfe1971..394042b 100644
+--- a/README.md
++++ b/README.md
+@@ -1,13 +1,14 @@
+-# TecnoStore — Tienda en Línea (Tarea 4)
++# TecnoStore — Tienda en Línea (Tarea 5: seguridad con JWT)
+ 
+ **Integrante:** Sergio Gualberto Morales Sanchinelli — **Carnet:** 9490-23-14510
+ 
+ | | |
+ |---|---|
+-| Rama de esta entrega | `Tarea4` |
++| Rama de esta entrega | `Tarea5` |
+ | Frontend desplegado (Netlify) | https://tarea4sgms.netlify.app/ |
+ | Backend desplegado (Render) |https://tienda-online-lioj.onrender.com/ |
+ | Estado global | **Opción A: Context API + useReducer** |
++| Colección Postman | [`docs/tecnostore_tarea5.postman_collection.json`](docs/tecnostore_tarea5.postman_collection.json) |
+ 
+ ## Descripción
+ 
+@@ -16,7 +17,8 @@ TecnoStore evolucionó en cuatro entregas:
+ 1. **Tarea 1:** sitio estático en HTML.
+ 2. **Tarea 2:** SPA con React, React Router y React-Bootstrap.
+ 3. **Tarea 3:** estado global de sesión (Login / Logout / Perfil) con `useContext` + `useReducer`.
+-4. **Tarea 4 (esta):** la interfaz deja de usar datos y autenticación simulados y consume una **API REST propia** (Node.js + Express) que guarda usuarios y productos en **MongoDB Atlas** con Mongoose.
++4. **Tarea 4:** la interfaz deja de usar datos y autenticación simulados y consume una **API REST propia** (Node.js + Express) que guarda usuarios y productos en **MongoDB Atlas** con Mongoose.
++5. **Tarea 5 (esta):** seguridad *stateless* con **JSON Web Tokens** que expiran a los **5 minutos**; el frontend inyecta el token en cada petición y, si caduca, cierra la sesión, avisa al usuario y lo redirige a `/login`.
+ 
+ ## Tecnologías
+ 
+@@ -51,6 +53,43 @@ tienda_online/
+         └── seed/                # seed.js + productos.data.js (carga inicial)
+ ```
+ 
++## Autenticación con JWT (Tarea 5)
++
++### Cómo se configuró la expiración en el backend
++
++- **Variables de entorno** (`server/.env`, nunca en Git; el repo solo trae `server/.env.example`): `JWT_SECRET` (clave de firma) y `JWT_EXPIRES_IN=5m`.
++- **Generación:** `POST /api/auth/login` valida el correo y la contraseña (bcrypt) y firma el token en `server/src/controllers/auth.controller.js` con `jwt.sign({ id, email, role }, JWT_SECRET, { expiresIn: '5m' })`. La opción `expiresIn` agrega el claim `exp` = `iat + 300 s`, es decir, **exactamente 5 minutos**.
++- **Middleware reutilizable:** `proteger` (`server/src/middleware/auth.js`) lee `Authorization: Bearer <token>`, verifica la firma con `JWT_SECRET` (`jwt.verify` también comprueba `exp`) y deja el usuario en `req.user`. Se aplica a las rutas protegidas: `POST`, `PUT/PATCH` y `DELETE` de `/api/productos` (junto a `soloAdmin`) y a la consulta privada `GET /api/auth/me`.
++- **Respuestas 401** (siempre JSON `{ error, message }`):
++
++| Situación | `error` |
++|---|---|
++| No hay cabecera `Authorization` o no trae token | `token_missing` |
++| El token superó los 5 min (`TokenExpiredError`) | `token_expired` |
++| Firma incorrecta, token mal formado o usuario inexistente | `token_invalid` |
++
++```json
++{
++  "error": "token_expired",
++  "message": "La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente."
++}
++```
++
++### Cómo el frontend intercepta la expiración y redirige
++
++1. **Persistencia y estado global:** al iniciar sesión, `AuthContext` (`useReducer`) guarda `{ user, token }` en el estado y en `localStorage`, y mantiene `isAuthenticated` sincronizado.
++2. **Cliente HTTP centralizado:** `src/services/api.js` es el único punto por donde salen las peticiones. Lee el token vigente y adjunta `Authorization: Bearer <token>` automáticamente (las páginas ya no pasan el token a mano).
++3. **Interceptor de respuestas:** en ese mismo cliente, si la API responde **401 a una petición que llevaba token**, se llama a `onSesionExpirada` (registrado por `AuthProvider` con `configurarClienteHttp`). Un 401 de un login fallido no lleva token, así que no lo activa. Si varias peticiones fallan a la vez, solo se procesa la primera.
++4. **Qué hace al detectar la expiración:** despacha la acción `LOGOUT` (borra token y usuario del estado y de `localStorage`) y ejecuta `navigate('/login', { replace: true, state: { sesionExpirada: true, desde } })` con `useNavigate`.
++5. **Aviso al usuario:** `Login.jsx` muestra un `<Alert variant="warning">` de React-Bootstrap con el texto *"Su sesión ya no es válida o ha caducado. Por favor, inicie sesión nuevamente."*. Tras volver a iniciar sesión, regresa a la página donde estaba (`desde`).
++6. **Al recargar la página** con un token vencido guardado, la validación inicial (`GET /api/auth/me`) pasa por el mismo interceptor y produce el mismo resultado.
++
++### Cómo probarlo
++
++1. Importa la colección de Postman/Thunder Client y ejecuta **1. Login** (guarda el token) y luego **2. Endpoint protegido** → `200`.
++2. Espera 5 minutos y ejecuta **3. Token vencido** → `401` con `token_expired`.
++3. En la app: inicia sesión, espera 5 minutos y realiza una acción protegida (p. ej. crear/editar un producto en *Administrar*, o recargar *Mi perfil*): se muestra el aviso y se redirige a `/login`.
++
+ ## Modelos (MongoDB)
+ 
+ **User** — `nombreCompleto`, `correo` (único), `password` (hash bcrypt, nunca se devuelve), `rol` (`admin` | `cliente`), `membresia`, `fechaNacimiento`, `genero`, `pais`, `suscripcion`, `createdAt`, `updatedAt`.
+@@ -65,8 +104,8 @@ Base: `{API_URL}/api`. Los endpoints de producto también responden en `/api/rec
+ |---|---|---|---|
+ | GET | `/health` | público | Estado del servicio |
+ | POST | `/auth/register` | público | Registra un usuario (siempre con rol `cliente`) |
+-| POST | `/auth/login` | público | Valida credenciales; devuelve `{ user, token }` |
+-| GET | `/auth/me` | token | Datos actuales del usuario autenticado |
++| POST | `/auth/login` | público | Valida credenciales; devuelve `{ user, token }` (JWT de 5 min) |
++| GET | `/auth/me` | token | Datos actuales del usuario autenticado (consulta privada) |
+ | GET | `/productos` | público | Lista con filtros: `q`, `categoria`, `precioMin`, `precioMax`, `disponibilidad`, `creadoPor`, `orden` |
+ | GET | `/productos/categorias` | público | Categorías distintas |
+ | GET | `/productos/:id` | público | Detalle de un producto |
+@@ -74,7 +113,7 @@ Base: `{API_URL}/api`. Los endpoints de producto también responden en `/api/rec
+ | PUT / PATCH | `/productos/:id` | admin | Actualiza un producto |
+ | DELETE | `/productos/:id` | admin | Elimina un producto |
+ 
+-Códigos de error usados: `400` datos inválidos, `401` sin sesión / credenciales inválidas, `403` sin permisos, `404` no encontrado, `409` correo duplicado.
++Códigos de error usados: `400` datos inválidos, `401` sin sesión / credenciales inválidas / token expirado, `403` sin permisos, `404` no encontrado, `409` correo duplicado.
+ 
+ ### Ejemplos de payload
+ 
+@@ -92,16 +131,16 @@ Códigos de error usados: `400` datos inválidos, `401` sin sesión / credencial
+   "descripcion": "Monitor 4K IPS.", "caracteristicas": ["4K", "IPS"], "colores": ["Negro"] }
+ ```
+ 
+-La colección lista para importar está en [`docs/tecnostore.postman_collection.json`](docs/tecnostore.postman_collection.json) (Postman o Thunder Client).
++La colección lista para importar está en [`docs/tecnostore_tarea5.postman_collection.json`](docs/tecnostore_tarea5.postman_collection.json) (Postman o Thunder Client).
+ 
+ ## Cómo ejecutarlo en local
+ 
+-Requisitos: Node 18+ y un clúster gratuito en MongoDB Atlas. Paso a paso detallado en [`docs/GUIA_TAREA4.md`](docs/GUIA_TAREA4.md).
++Requisitos: Node 18+ y un clúster gratuito en MongoDB Atlas.
+ 
+ ```bash
+ # 1) Backend
+ cd server
+-cp .env.example .env        # completa MONGODB_URI y JWT_SECRET
++cp .env.example .env        # completa MONGODB_URI y JWT_SECRET (JWT_EXPIRES_IN=5m)
+ npm install
+ npm run seed                # crea el admin y carga el catálogo
+ npm run dev                 # http://localhost:5000
+@@ -119,6 +158,7 @@ Usuario administrador del seed (cámbialo en `server/.env` antes de correr el se
+ - Credenciales y cadena de conexión solo en `.env` (ignorado por Git); se versiona únicamente `.env.example`.
+ - Contraseñas con hash `bcrypt`; el campo `password` nunca sale en las respuestas.
+ - El rol no se acepta desde el registro (nadie puede crearse como `admin`).
++- Sesión *stateless* con JWT de 5 minutos; `JWT_SECRET` y el tiempo de expiración viven solo en el `.env` del backend (o en las variables de entorno de Render/Railway).
+ - Escritura del catálogo protegida con JWT + rol `admin`; lista blanca de campos en crear/actualizar.
+ - Mensaje único `Credenciales inválidas` (no revela qué correos existen), `helmet`, CORS restringido a `CLIENT_URL` y límite de intentos en `/auth`.
+ 
+@@ -126,4 +166,4 @@ Usuario administrador del seed (cámbialo en `server/.env` antes de correr el se
+ 
+ | Integrante | Carnet | Secciones, endpoints y componentes |
+ |---|---|---|
+-| Sergio Gualberto Morales Sanchinelli | 9490-23-14510 | Todo el proyecto: backend completo (modelos, rutas, controladores, auth, seed), `AuthContext`, Navbar, Login, Registro, Perfil, Productos, Detalle, AdminProductos, Home y documentación. |
++| Sergio Gualberto Morales Sanchinelli | 9490-23-14510 | Todo el proyecto: backend completo (modelos, rutas, controladores, seed), **Tarea 5:** generación del JWT de 5 min en el login, middleware `proteger` con errores `token_missing` / `token_expired` / `token_invalid`, `.env.example`; frontend: `AuthContext`, cliente HTTP con inyección de token e interceptor 401, aviso de sesión caducada en `Login`, redirección con `useNavigate`, colección Postman y documentación. |
+diff --git a/docs/tecnostore_tarea5.postman_collection.json b/docs/tecnostore_tarea5.postman_collection.json
+new file mode 100644
+index 0000000..c5a5120
+--- /dev/null
++++ b/docs/tecnostore_tarea5.postman_collection.json
+@@ -0,0 +1,418 @@
++{
++  "info": {
++    "name": "TecnoStore - Tarea 5 (JWT 5 min)",
++    "description": "Flujo: 1) Login -> guarda {{token}}; 2) petición protegida OK; 3) esperar 5 min y repetir -> 401 token_expired. Cambia baseUrl a http://localhost:5000 para probar en local.",
++    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
++  },
++  "variable": [
++    {
++      "key": "baseUrl",
++      "value": "https://tienda-online-lioj.onrender.com"
++    },
++    {
++      "key": "correo",
++      "value": "admin@tecnostore.com"
++    },
++    {
++      "key": "password",
++      "value": "Admin12345"
++    },
++    {
++      "key": "token",
++      "value": ""
++    },
++    {
++      "key": "token_emitido_a_las",
++      "value": ""
++    }
++  ],
++  "item": [
++    {
++      "name": "1. Login (obtiene el token)",
++      "event": [
++        {
++          "listen": "test",
++          "script": {
++            "type": "text/javascript",
++            "exec": [
++              "pm.test('Login 200', () => pm.response.to.have.status(200));",
++              "const json = pm.response.json();",
++              "pm.test('Devuelve un token JWT', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
++              "pm.collectionVariables.set('token', json.token);",
++              "// Hora de emisión: para la petición 3 espera 5 minutos desde este momento",
++              "pm.collectionVariables.set('token_emitido_a_las', new Date().toISOString());"
++            ]
++          }
++        }
++      ],
++      "request": {
++        "method": "POST",
++        "header": [
++          {
++            "key": "Accept",
++            "value": "application/json"
++          },
++          {
++            "key": "Content-Type",
++            "value": "application/json"
++          }
++        ],
++        "url": {
++          "raw": "{{baseUrl}}/api/auth/login",
++          "host": [
++            "{{baseUrl}}"
++          ],
++          "path": [
++            "api",
++            "auth",
++            "login"
++          ]
++        },
++        "description": "Valida credenciales y devuelve { user, token }. El script de test guarda el token en la variable de colección {{token}}. El JWT vive exactamente 5 minutos.",
++        "body": {
++          "mode": "raw",
++          "raw": "{\n  \"correo\": \"{{correo}}\",\n  \"password\": \"{{password}}\"\n}",
++          "options": {
++            "raw": {
++              "language": "json"
++            }
++          }
++        }
++      },
++      "response": [
++        {
++          "name": "Ejemplo 200",
++          "originalRequest": {
++            "method": "POST",
++            "header": [
++              {
++                "key": "Accept",
++                "value": "application/json"
++              },
++              {
++                "key": "Content-Type",
++                "value": "application/json"
++              }
++            ],
++            "url": {
++              "raw": "{{baseUrl}}/api/auth/login",
++              "host": [
++                "{{baseUrl}}"
++              ],
++              "path": [
++                "api",
++                "auth",
++                "login"
++              ]
++            },
++            "description": "Valida credenciales y devuelve { user, token }. El script de test guarda el token en la variable de colección {{token}}. El JWT vive exactamente 5 minutos.",
++            "body": {
++              "mode": "raw",
++              "raw": "{\n  \"correo\": \"{{correo}}\",\n  \"password\": \"{{password}}\"\n}",
++              "options": {
++                "raw": {
++                  "language": "json"
++                }
++              }
++            }
++          },
++          "status": "OK",
++          "code": 200,
++          "_postman_previewlanguage": "json",
++          "header": [
++            {
++              "key": "Content-Type",
++              "value": "application/json; charset=utf-8"
++            }
++          ],
++          "body": "{\n  \"mensaje\": \"Inicio de sesión exitoso\",\n  \"user\": {\n    \"id\": \"665f1b2c8e4a3a0012345678\",\n    \"nombreCompleto\": \"Administrador TecnoStore\",\n    \"correo\": \"admin@tecnostore.com\",\n    \"rol\": \"admin\"\n  },\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.<payload id/email/role + exp>.<firma>\"\n}"
++        }
++      ]
++    },
++    {
++      "name": "2. Endpoint protegido con token válido (200)",
++      "event": [
++        {
++          "listen": "test",
++          "script": {
++            "type": "text/javascript",
++            "exec": [
++              "pm.test('Acceso permitido: 200', () => pm.response.to.have.status(200));",
++              "pm.test('Devuelve el usuario autenticado', () => pm.expect(pm.response.json().user).to.have.property('correo'));"
++            ]
++          }
++        }
++      ],
++      "request": {
++        "method": "GET",
++        "header": [
++          {
++            "key": "Accept",
++            "value": "application/json"
++          },
++          {
++            "key": "Authorization",
++            "value": "Bearer {{token}}"
++          }
++        ],
++        "url": {
++          "raw": "{{baseUrl}}/api/auth/me",
++          "host": [
++            "{{baseUrl}}"
++          ],
++          "path": [
++            "api",
++            "auth",
++            "me"
++          ]
++        },
++        "description": "Envía Authorization: Bearer {{token}}. Ejecutar justo después del login (dentro de los 5 minutos)."
++      },
++      "response": [
++        {
++          "name": "Ejemplo 200",
++          "originalRequest": {
++            "method": "GET",
++            "header": [
++              {
++                "key": "Accept",
++                "value": "application/json"
++              },
++              {
++                "key": "Authorization",
++                "value": "Bearer {{token}}"
++              }
++            ],
++            "url": {
++              "raw": "{{baseUrl}}/api/auth/me",
++              "host": [
++                "{{baseUrl}}"
++              ],
++              "path": [
++                "api",
++                "auth",
++                "me"
++              ]
++            },
++            "description": "Envía Authorization: Bearer {{token}}. Ejecutar justo después del login (dentro de los 5 minutos)."
++          },
++          "status": "OK",
++          "code": 200,
++          "_postman_previewlanguage": "json",
++          "header": [
++            {
++              "key": "Content-Type",
++              "value": "application/json; charset=utf-8"
++            }
++          ],
++          "body": "{\n  \"user\": {\n    \"id\": \"665f1b2c8e4a3a0012345678\",\n    \"nombreCompleto\": \"Administrador TecnoStore\",\n    \"correo\": \"admin@tecnostore.com\",\n    \"rol\": \"admin\"\n  }\n}"
++        }
++      ]
++    },
++    {
++      "name": "3. Token vencido tras 5 minutos (401 token_expired)",
++      "event": [
++        {
++          "listen": "test",
++          "script": {
++            "type": "text/javascript",
++            "exec": [
++              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
++              "pm.test('error = token_expired', () => pm.expect(pm.response.json().error).to.eql('token_expired'));",
++              "pm.test('Mensaje descriptivo', () => pm.expect(pm.response.json().message).to.eql('La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente.'));"
++            ]
++          }
++        }
++      ],
++      "request": {
++        "method": "GET",
++        "header": [
++          {
++            "key": "Accept",
++            "value": "application/json"
++          },
++          {
++            "key": "Authorization",
++            "value": "Bearer {{token}}"
++          }
++        ],
++        "url": {
++          "raw": "{{baseUrl}}/api/auth/me",
++          "host": [
++            "{{baseUrl}}"
++          ],
++          "path": [
++            "api",
++            "auth",
++            "me"
++          ]
++        },
++        "description": "MISMA petición que la 2, pero ejecutada DESPUÉS de dejar pasar 5 minutos desde el login (ver variable token_emitido_a_las). El middleware responde 401 con { error: 'token_expired', message }."
++      },
++      "response": [
++        {
++          "name": "Ejemplo 401",
++          "originalRequest": {
++            "method": "GET",
++            "header": [
++              {
++                "key": "Accept",
++                "value": "application/json"
++              },
++              {
++                "key": "Authorization",
++                "value": "Bearer {{token}}"
++              }
++            ],
++            "url": {
++              "raw": "{{baseUrl}}/api/auth/me",
++              "host": [
++                "{{baseUrl}}"
++              ],
++              "path": [
++                "api",
++                "auth",
++                "me"
++              ]
++            },
++            "description": "MISMA petición que la 2, pero ejecutada DESPUÉS de dejar pasar 5 minutos desde el login (ver variable token_emitido_a_las). El middleware responde 401 con { error: 'token_expired', message }."
++          },
++          "status": "Unauthorized",
++          "code": 401,
++          "_postman_previewlanguage": "json",
++          "header": [
++            {
++              "key": "Content-Type",
++              "value": "application/json; charset=utf-8"
++            }
++          ],
++          "body": "{\n  \"error\": \"token_expired\",\n  \"message\": \"La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente.\"\n}"
++        }
++      ]
++    },
++    {
++      "name": "4. Sin cabecera Authorization (401 token_missing)",
++      "event": [
++        {
++          "listen": "test",
++          "script": {
++            "type": "text/javascript",
++            "exec": [
++              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
++              "pm.test('error = token_missing', () => pm.expect(pm.response.json().error).to.eql('token_missing'));"
++            ]
++          }
++        }
++      ],
++      "request": {
++        "method": "GET",
++        "header": [
++          {
++            "key": "Accept",
++            "value": "application/json"
++          }
++        ],
++        "url": {
++          "raw": "{{baseUrl}}/api/auth/me",
++          "host": [
++            "{{baseUrl}}"
++          ],
++          "path": [
++            "api",
++            "auth",
++            "me"
++          ]
++        },
++        "description": "Petición sin token: el middleware responde 401."
++      },
++      "response": [
++        {
++          "name": "Ejemplo 401",
++          "originalRequest": {
++            "method": "GET",
++            "header": [
++              {
++                "key": "Accept",
++                "value": "application/json"
++              }
++            ],
++            "url": {
++              "raw": "{{baseUrl}}/api/auth/me",
++              "host": [
++                "{{baseUrl}}"
++              ],
++              "path": [
++                "api",
++                "auth",
++                "me"
++              ]
++            },
++            "description": "Petición sin token: el middleware responde 401."
++          },
++          "status": "Unauthorized",
++          "code": 401,
++          "_postman_previewlanguage": "json",
++          "header": [
++            {
++              "key": "Content-Type",
++              "value": "application/json; charset=utf-8"
++            }
++          ],
++          "body": "{\n  \"error\": \"token_missing\",\n  \"message\": \"No autenticado: falta el token de acceso (Authorization: Bearer <token>).\"\n}"
++        }
++      ]
++    },
++    {
++      "name": "5. Crear producto (ruta protegida, solo admin)",
++      "event": [
++        {
++          "listen": "test",
++          "script": {
++            "type": "text/javascript",
++            "exec": [
++              "pm.test('Producto creado: 201', () => pm.response.to.have.status(201));"
++            ]
++          }
++        }
++      ],
++      "request": {
++        "method": "POST",
++        "header": [
++          {
++            "key": "Accept",
++            "value": "application/json"
++          },
++          {
++            "key": "Authorization",
++            "value": "Bearer {{token}}"
++          },
++          {
++            "key": "Content-Type",
++            "value": "application/json"
++          }
++        ],
++        "url": {
++          "raw": "{{baseUrl}}/api/productos",
++          "host": [
++            "{{baseUrl}}"
++          ],
++          "path": [
++            "api",
++            "productos"
++          ]
++        },
++        "description": "POST protegido por JWT + rol admin. Con token vencido responde el mismo 401 token_expired.",
++        "body": {
++          "mode": "raw",
++          "raw": "{\n  \"nombre\": \"Monitor 27\\\"\",\n  \"categoria\": \"Monitores\",\n  \"marca\": \"ViewMax\",\n  \"precio\": 1800,\n  \"disponibilidad\": \"En stock\",\n  \"imagenColor\": \"#7c8cf8\",\n  \"descripcion\": \"Monitor 4K IPS.\",\n  \"caracteristicas\": [\n    \"4K\",\n    \"IPS\"\n  ],\n  \"colores\": [\n    \"Negro\"\n  ]\n}",
++          "options": {
++            "raw": {
++              "language": "json"
++            }
++          }
++        }
++      },
++      "response": []
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/server/.env.example b/server/.env.example
+new file mode 100644
+index 0000000..0342e80
+--- /dev/null
++++ b/server/.env.example
+@@ -0,0 +1,22 @@
++# Copia este archivo a ".env" y completa los valores.
++# NUNCA subas el archivo ".env" a GitHub (ya está en .gitignore).
++
++PORT=5000
++
++# Cadena de conexión de MongoDB Atlas
++MONGODB_URI=mongodb+srv://USUARIO:CONTRASENA@cluster0.xxxxx.mongodb.net/tecnostore?retryWrites=true&w=majority
++
++# URL(s) del frontend autorizadas por CORS, separadas por coma
++CLIENT_URL=http://localhost:5173
++
++# --- JSON Web Token (Tarea 5) ---
++# Clave secreta para firmar los tokens. Usa una cadena larga y aleatoria. Ejemplo para generarla:
++#   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
++JWT_SECRET=cambia_esto_por_una_clave_larga_y_aleatoria
++# Tiempo de vida del token: exactamente 5 minutos
++JWT_EXPIRES_IN=5m
++
++# Datos del administrador que crea "npm run seed"
++ADMIN_EMAIL=admin@tecnostore.com
++ADMIN_NOMBRE=Administrador TecnoStore
++ADMIN_PASSWORD=Admin12345
+diff --git a/server/src/controllers/auth.controller.js b/server/src/controllers/auth.controller.js
+index ab42913..4c82752 100644
+--- a/server/src/controllers/auth.controller.js
++++ b/server/src/controllers/auth.controller.js
+@@ -2,10 +2,15 @@ import jwt from 'jsonwebtoken'
+ import User from '../models/User.js'
+ import { asyncHandler, HttpError } from '../utils/asyncHandler.js'
+ 
+-const firmarToken = (usuario) =>
+-  jwt.sign({ id: usuario._id }, process.env.JWT_SECRET, {
+-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+-  })
++// Firma el JWT con la clave secreta del servidor (JWT_SECRET, solo en .env).
++// Payload: identidad mínima del usuario (id, email, role).
++// Expiración estricta: JWT_EXPIRES_IN (en .env), por defecto exactamente 5 minutos.
++export const firmarToken = (usuario) =>
++  jwt.sign(
++    { id: usuario._id, email: usuario.correo, role: usuario.rol },
++    process.env.JWT_SECRET,
++    { expiresIn: process.env.JWT_EXPIRES_IN || '5m' },
++  )
+ 
+ // POST /api/auth/register
+ // Crea un usuario nuevo. El rol SIEMPRE es "cliente": nunca se acepta el rol
+diff --git a/server/src/middleware/auth.js b/server/src/middleware/auth.js
+index 49e117a..6a9fab8 100644
+--- a/server/src/middleware/auth.js
++++ b/server/src/middleware/auth.js
+@@ -2,24 +2,50 @@ import jwt from 'jsonwebtoken'
+ import User from '../models/User.js'
+ import { asyncHandler, HttpError } from '../utils/asyncHandler.js'
+ 
+-// Verifica el token JWT del encabezado "Authorization: Bearer <token>"
+-// y deja el usuario autenticado en req.user.
+-export const proteger = asyncHandler(async (req, _res, next) => {
++// Respuesta 401 uniforme para el frontend: { error, message }.
++// "error" es un código estable que el cliente puede evaluar; "message" es legible.
++const noAutorizado = (res, error, message) => res.status(401).json({ error, message })
++
++// Middleware de autenticación reutilizable.
++// Extrae el token de "Authorization: Bearer <token>", verifica la firma con
++// JWT_SECRET y deja el usuario autenticado en req.user (y el payload en req.auth).
++//
++//   401 token_missing  -> no hay cabecera Authorization o no trae token
++//   401 token_expired  -> el token superó su tiempo de vida (5 min)
++//   401 token_invalid  -> firma incorrecta, token mal formado, usuario inexistente
++export const proteger = asyncHandler(async (req, res, next) => {
+   const cabecera = req.headers.authorization || ''
+-  const token = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : null
++  const [esquema, token] = cabecera.split(' ')
+ 
+-  if (!token) throw new HttpError(401, 'No autenticado: falta el token')
++  if (esquema !== 'Bearer' || !token) {
++    return noAutorizado(
++      res,
++      'token_missing',
++      'No autenticado: falta el token de acceso (Authorization: Bearer <token>).',
++    )
++  }
+ 
+   let payload
+   try {
++    // Verifica la firma y también el vencimiento (claim "exp")
+     payload = jwt.verify(token, process.env.JWT_SECRET)
+-  } catch {
+-    throw new HttpError(401, 'Token inválido o expirado')
++  } catch (error) {
++    if (error instanceof jwt.TokenExpiredError) {
++      return noAutorizado(
++        res,
++        'token_expired',
++        'La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente.',
++      )
++    }
++    return noAutorizado(res, 'token_invalid', 'El token no es válido. Inicie sesión nuevamente.')
+   }
+ 
+   const usuario = await User.findById(payload.id)
+-  if (!usuario) throw new HttpError(401, 'El usuario de este token ya no existe')
++  if (!usuario) {
++    return noAutorizado(res, 'token_invalid', 'El usuario de este token ya no existe.')
++  }
+ 
++  req.auth = payload
+   req.user = usuario
+   next()
+ })
+diff --git a/src/context/AuthContext.jsx b/src/context/AuthContext.jsx
+index 29d3324..8fbca78 100644
+--- a/src/context/AuthContext.jsx
++++ b/src/context/AuthContext.jsx
+@@ -1,5 +1,15 @@
+-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react'
+-import { authApi } from '../services/api.js'
++import {
++  createContext,
++  useCallback,
++  useContext,
++  useEffect,
++  useLayoutEffect,
++  useMemo,
++  useReducer,
++  useRef,
++} from 'react'
++import { useNavigate } from 'react-router-dom'
++import { authApi, configurarClienteHttp } from '../services/api.js'
+ 
+ // ---------------------------------------------------------------------------
+ // Estado global de autenticación: Context API + useReducer (Opción A)
+@@ -77,27 +87,58 @@ const AuthDispatchContext = createContext(null)
+ 
+ export function AuthProvider({ children }) {
+   const [estado, dispatch] = useReducer(authReducer, undefined, leerSesionGuardada)
++  const navigate = useNavigate()
+ 
+   // Persistir cada cambio de sesión
+   useEffect(() => {
+     guardarSesion(estado)
+   }, [estado])
+ 
++  // Referencia al token vigente: el cliente HTTP (services/api.js) la lee en cada
++  // petición para adjuntar "Authorization: Bearer <token>".
++  const tokenRef = useRef(estado.token)
++  tokenRef.current = estado.token
++
++  // Conecta el cliente HTTP con el estado global. Es un layout effect para que
++  // quede registrado ANTES de los useEffect de las páginas que piden datos.
++  useLayoutEffect(() => {
++    configurarClienteHttp({
++      getToken: () => tokenRef.current,
++
++      // Interceptor de sesión expirada: se ejecuta cuando la API responde 401
++      // a una petición que llevaba token (el JWT de 5 minutos ya caducó).
++      onSesionExpirada: () => {
++        // Varias peticiones pueden fallar a la vez: solo se procesa la primera.
++        if (!tokenRef.current) return
++        tokenRef.current = null
++
++        // 1) Elimina token y datos del usuario (reducer + localStorage) -> LOGOUT
++        dispatch({ type: ACCIONES.LOGOUT })
++
++        // 2) Redirige a /login con el aviso; "desde" permite volver a la página
++        //    donde estaba el usuario después de iniciar sesión de nuevo.
++        const desde = window.location.pathname
++        navigate('/login', {
++          replace: true,
++          state: { sesionExpirada: true, desde: desde === '/login' ? undefined : desde },
++        })
++      },
++    })
++  }, [navigate])
++
+   // Al abrir la app con una sesión guardada, se valida el token contra la API
+-  // y se refrescan los datos del usuario desde MongoDB. Si el token ya no sirve
+-  // (expiró, el usuario fue eliminado...) se cierra la sesión.
++  // y se refrescan los datos del usuario desde MongoDB. Si el token ya expiró,
++  // el interceptor del cliente HTTP cierra la sesión y redirige al login.
+   const tokenGuardado = estado.token
+   useEffect(() => {
+     if (!tokenGuardado) return undefined
+     const controlador = new AbortController()
+ 
+     authApi
+-      .me(tokenGuardado, controlador.signal)
++      .me(controlador.signal)
+       .then(({ user }) => dispatch({ type: ACCIONES.UPDATE_USER, payload: user }))
+-      .catch((error) => {
+-        if (error.name === 'AbortError') return
+-        if (error.status === 401) dispatch({ type: ACCIONES.LOGOUT })
+-        // Si es un error de red se conserva la sesión guardada
++      .catch(() => {
++        // 401 -> ya lo gestionó el interceptor. Error de red -> se conserva la sesión.
+       })
+ 
+     return () => controlador.abort()
+diff --git a/src/pages/AdminProductos.jsx b/src/pages/AdminProductos.jsx
+index 22a7e43..59019cc 100644
+--- a/src/pages/AdminProductos.jsx
++++ b/src/pages/AdminProductos.jsx
+@@ -1,7 +1,6 @@
+ import { useState } from 'react'
+ import { Alert, Badge, Button, Col, Container, Form, Modal, Row, Table } from 'react-bootstrap'
+ import { Cargando, ErrorApi } from '../components/Estados.jsx'
+-import { useAuth } from '../context/AuthContext.jsx'
+ import { useAsync } from '../hooks/useAsync.js'
+ import { productosApi } from '../services/api.js'
+ import { formatoQuetzales } from '../utils/formato.js'
+@@ -47,7 +46,6 @@ const aPayload = (f) => ({
+ })
+ 
+ function AdminProductos() {
+-  const { token, logout } = useAuth()
+   const { data, loading, error, recargar } = useAsync((signal) => productosApi.listar({}, signal), [])
+   const productos = data?.productos ?? []
+ 
+@@ -62,11 +60,6 @@ function AdminProductos() {
+ 
+   const [aviso, setAviso] = useState(null) // { variante, texto }
+ 
+-  // Si el token expiró, se cierra la sesión y RutaProtegida lleva al login
+-  const manejarSesionExpirada = (err) => {
+-    if (err.status === 401) logout()
+-  }
+-
+   const abrirNuevo = () => {
+     setFormulario(formularioVacio)
+     setErrorForm('')
+@@ -96,17 +89,16 @@ function AdminProductos() {
+     try {
+       const payload = aPayload(formulario)
+       if (editando === 'nuevo') {
+-        await productosApi.crear(payload, token)
++        await productosApi.crear(payload)
+         setAviso({ variante: 'success', texto: `Producto "${payload.nombre}" creado correctamente.` })
+       } else {
+-        await productosApi.actualizar(editando.id, payload, token)
++        await productosApi.actualizar(editando.id, payload)
+         setAviso({ variante: 'success', texto: `Producto "${payload.nombre}" actualizado.` })
+       }
+       setEditando(null)
+       recargar()
+     } catch (err) {
+       setErrorForm(err.message)
+-      manejarSesionExpirada(err)
+     } finally {
+       setGuardando(false)
+     }
+@@ -116,14 +108,13 @@ function AdminProductos() {
+   const confirmarEliminacion = async () => {
+     setEliminando(true)
+     try {
+-      await productosApi.eliminar(porEliminar.id, token)
++      await productosApi.eliminar(porEliminar.id)
+       setAviso({ variante: 'success', texto: `Producto "${porEliminar.nombre}" eliminado.` })
+       setPorEliminar(null)
+       recargar()
+     } catch (err) {
+       setAviso({ variante: 'danger', texto: err.message })
+       setPorEliminar(null)
+-      manejarSesionExpirada(err)
+     } finally {
+       setEliminando(false)
+     }
+diff --git a/src/pages/Login.jsx b/src/pages/Login.jsx
+index 7e8cdaf..f3e768c 100644
+--- a/src/pages/Login.jsx
++++ b/src/pages/Login.jsx
+@@ -12,6 +12,11 @@ function Login() {
+   const [password, setPassword] = useState('')
+   const [error, setError] = useState('')
+   const [validado, setValidado] = useState(false)
++  const [avisoVisible, setAvisoVisible] = useState(true)
++
++  // El interceptor de sesión (AuthProvider) redirige aquí con { sesionExpirada: true }
++  // cuando el JWT de 5 minutos caducó o dejó de ser válido.
++  const sesionExpirada = Boolean(ubicacion.state?.sesionExpirada)
+ 
+   // Mensaje que llega desde el registro ("Cuenta creada, ya puedes iniciar sesión")
+   const mensajeRegistro = ubicacion.state?.mensaje
+@@ -46,6 +51,12 @@ function Login() {
+           <h2 className="ts-section-title">Iniciar sesión</h2>
+           <div className="ts-divider mb-3" />
+ 
++          {sesionExpirada && avisoVisible && (
++            <Alert variant="warning" dismissible onClose={() => setAvisoVisible(false)}>
++              <Alert.Heading as="h6">Sesión caducada</Alert.Heading>
++              Su sesión ya no es válida o ha caducado. Por favor, inicie sesión nuevamente.
++            </Alert>
++          )}
+           {mensajeRegistro && !error && <Alert variant="success">{mensajeRegistro}</Alert>}
+           {error && (
+             <Alert variant="danger" dismissible onClose={() => setError('')}>
+diff --git a/src/pages/Perfil.jsx b/src/pages/Perfil.jsx
+index 0c77cd1..522ccbc 100644
+--- a/src/pages/Perfil.jsx
++++ b/src/pages/Perfil.jsx
+@@ -12,7 +12,7 @@ function Perfil() {
+   const navigate = useNavigate()
+ 
+   // Datos frescos del usuario autenticado, leídos de MongoDB (GET /api/auth/me)
+-  const perfil = useAsync((signal) => authApi.me(token, signal), [token])
++  const perfil = useAsync((signal) => authApi.me(signal), [token])
+ 
+   // Se sincroniza el estado global con lo que dice la base de datos
+   useEffect(() => {
+diff --git a/src/services/api.js b/src/services/api.js
+index 22776cd..b98bba3 100644
+--- a/src/services/api.js
++++ b/src/services/api.js
+@@ -1,19 +1,36 @@
+-// Cliente HTTP de TecnoStore: todas las peticiones a la API pasan por aquí.
++// Cliente HTTP centralizado de TecnoStore: TODAS las peticiones a la API pasan por aquí.
++//  - Adjunta automáticamente "Authorization: Bearer <token>" cuando hay sesión.
++//  - Hace de interceptor de respuestas: ante un 401 con sesión activa avisa al
++//    AuthProvider (configurarClienteHttp) para cerrar la sesión y redirigir al login.
+ // La URL del backend viene de la variable de entorno VITE_API_URL
+ // (en local: http://localhost:5000; en producción: la URL de Render/Railway).
+ const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '')
+ 
+ export class ApiError extends Error {
+-  constructor(message, status) {
++  constructor(message, status, codigo) {
+     super(message)
+     this.name = 'ApiError'
+     this.status = status
++    this.codigo = codigo // ej. "token_expired" (viene en el campo "error" del backend)
+   }
+ }
+ 
+-async function request(ruta, { method = 'GET', body, token, signal } = {}) {
++// El AuthProvider registra aquí cómo leer el token vigente y qué hacer cuando
++// la sesión deja de ser válida. Así este módulo no depende de React.
++let obtenerToken = () => null
++let alSesionExpirada = () => {}
++
++export function configurarClienteHttp({ getToken, onSesionExpirada }) {
++  obtenerToken = getToken ?? (() => null)
++  alSesionExpirada = onSesionExpirada ?? (() => {})
++}
++
++async function request(ruta, { method = 'GET', body, signal } = {}) {
+   const headers = { Accept: 'application/json' }
+   if (body !== undefined) headers['Content-Type'] = 'application/json'
++
++  // Inyección automática del JWT en cada petición
++  const token = obtenerToken()
+   if (token) headers.Authorization = `Bearer ${token}`
+ 
+   let respuesta
+@@ -37,7 +54,17 @@ async function request(ruta, { method = 'GET', body, token, signal } = {}) {
+   const datos = await respuesta.json().catch(() => ({}))
+ 
+   if (!respuesta.ok) {
+-    throw new ApiError(datos.mensaje || `Error ${respuesta.status} del servidor`, respuesta.status)
++    // Interceptor de sesión: un 401 en una petición que SÍ llevaba token significa
++    // que el JWT expiró (token_expired, a los 5 min) o ya no es válido. Un 401 de
++    // un login fallido no lleva token, así que no dispara el cierre de sesión.
++    if (respuesta.status === 401 && token) alSesionExpirada(datos)
++
++    // El backend responde { error, message } en los 401 de JWT y { mensaje } en el resto
++    throw new ApiError(
++      datos.message || datos.mensaje || `Error ${respuesta.status} del servidor`,
++      respuesta.status,
++      datos.error,
++    )
+   }
+   return datos
+ }
+@@ -47,7 +74,7 @@ export const authApi = {
+   register: (datos) => request('/auth/register', { method: 'POST', body: datos }),
+   login: (correo, password) =>
+     request('/auth/login', { method: 'POST', body: { correo, password } }),
+-  me: (token, signal) => request('/auth/me', { token, signal }),
++  me: (signal) => request('/auth/me', { signal }),
+ }
+ 
+ // ---------- Productos (entidad de negocio) ----------
+@@ -62,8 +89,7 @@ export const productosApi = {
+   },
+   categorias: (signal) => request('/productos/categorias', { signal }),
+   obtener: (id, signal) => request(`/productos/${id}`, { signal }),
+-  crear: (datos, token) => request('/productos', { method: 'POST', body: datos, token }),
+-  actualizar: (id, datos, token) =>
+-    request(`/productos/${id}`, { method: 'PUT', body: datos, token }),
+-  eliminar: (id, token) => request(`/productos/${id}`, { method: 'DELETE', token }),
++  crear: (datos) => request('/productos', { method: 'POST', body: datos }),
++  actualizar: (id, datos) => request(`/productos/${id}`, { method: 'PUT', body: datos }),
++  eliminar: (id) => request(`/productos/${id}`, { method: 'DELETE' }),
+ }
+-- 
+2.43.0
+
