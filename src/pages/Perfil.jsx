@@ -12,7 +12,7 @@ function Perfil() {
   const navigate = useNavigate()
 
   // Datos frescos del usuario autenticado, leídos de MongoDB (GET /api/auth/me)
-  const perfil = useAsync((signal) => authApi.me(token, signal), [token])
+  const perfil = useAsync((signal) => authApi.me(signal), [token])
 
   // Se sincroniza el estado global con lo que dice la base de datos
   useEffect(() => {

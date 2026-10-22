@@ -12,6 +12,11 @@ function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [validado, setValidado] = useState(false)
+  const [avisoVisible, setAvisoVisible] = useState(true)
+
+  // El interceptor de sesión (AuthProvider) redirige aquí con { sesionExpirada: true }
+  // cuando el JWT de 5 minutos caducó o dejó de ser válido.
+  const sesionExpirada = Boolean(ubicacion.state?.sesionExpirada)
 
   // Mensaje que llega desde el registro ("Cuenta creada, ya puedes iniciar sesión")
   const mensajeRegistro = ubicacion.state?.mensaje
@@ -46,6 +51,12 @@ function Login() {
           <h2 className="ts-section-title">Iniciar sesión</h2>
           <div className="ts-divider mb-3" />
 
+          {sesionExpirada && avisoVisible && (
+            <Alert variant="warning" dismissible onClose={() => setAvisoVisible(false)}>
+              <Alert.Heading as="h6">Sesión caducada</Alert.Heading>
+              Su sesión ya no es válida o ha caducado. Por favor, inicie sesión nuevamente.
+            </Alert>
+          )}
           {mensajeRegistro && !error && <Alert variant="success">{mensajeRegistro}</Alert>}
           {error && (
             <Alert variant="danger" dismissible onClose={() => setError('')}>

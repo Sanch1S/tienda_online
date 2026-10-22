@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Alert, Badge, Button, Col, Container, Form, Modal, Row, Table } from 'react-bootstrap'
 import { Cargando, ErrorApi } from '../components/Estados.jsx'
-import { useAuth } from '../context/AuthContext.jsx'
 import { useAsync } from '../hooks/useAsync.js'
 import { productosApi } from '../services/api.js'
 import { formatoQuetzales } from '../utils/formato.js'
@@ -47,7 +46,6 @@ const aPayload = (f) => ({
 })
 
 function AdminProductos() {
-  const { token, logout } = useAuth()
   const { data, loading, error, recargar } = useAsync((signal) => productosApi.listar({}, signal), [])
   const productos = data?.productos ?? []
 
@@ -61,11 +59,6 @@ function AdminProductos() {
   const [eliminando, setEliminando] = useState(false)
 
   const [aviso, setAviso] = useState(null) // { variante, texto }
-
-  // Si el token expiró, se cierra la sesión y RutaProtegida lleva al login
-  const manejarSesionExpirada = (err) => {
-    if (err.status === 401) logout()
-  }
 
   const abrirNuevo = () => {
     setFormulario(formularioVacio)
@@ -96,17 +89,16 @@ function AdminProductos() {
     try {
       const payload = aPayload(formulario)
       if (editando === 'nuevo') {
-        await productosApi.crear(payload, token)
+        await productosApi.crear(payload)
         setAviso({ variante: 'success', texto: `Producto "${payload.nombre}" creado correctamente.` })
       } else {
-        await productosApi.actualizar(editando.id, payload, token)
+        await productosApi.actualizar(editando.id, payload)
         setAviso({ variante: 'success', texto: `Producto "${payload.nombre}" actualizado.` })
       }
       setEditando(null)
       recargar()
     } catch (err) {
       setErrorForm(err.message)
-      manejarSesionExpirada(err)
     } finally {
       setGuardando(false)
     }
@@ -116,14 +108,13 @@ function AdminProductos() {
   const confirmarEliminacion = async () => {
     setEliminando(true)
     try {
-      await productosApi.eliminar(porEliminar.id, token)
+      await productosApi.eliminar(porEliminar.id)
       setAviso({ variante: 'success', texto: `Producto "${porEliminar.nombre}" eliminado.` })
       setPorEliminar(null)
       recargar()
     } catch (err) {
       setAviso({ variante: 'danger', texto: err.message })
       setPorEliminar(null)
-      manejarSesionExpirada(err)
     } finally {
       setEliminando(false)
     }

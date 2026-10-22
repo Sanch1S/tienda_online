@@ -1,0 +1,418 @@
+{
+  "info": {
+    "name": "TecnoStore - Tarea 5 (JWT 5 min)",
+    "description": "Flujo: 1) Login -> guarda {{token}}; 2) petición protegida OK; 3) esperar 5 min y repetir -> 401 token_expired. Cambia baseUrl a http://localhost:5000 para probar en local.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://tienda-online-lioj.onrender.com"
+    },
+    {
+      "key": "correo",
+      "value": "admin@tecnostore.com"
+    },
+    {
+      "key": "password",
+      "value": "Admin12345"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "token_emitido_a_las",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login (obtiene el token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Devuelve un token JWT', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('token', json.token);",
+              "// Hora de emisión: para la petición 3 espera 5 minutos desde este momento",
+              "pm.collectionVariables.set('token_emitido_a_las', new Date().toISOString());"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Valida credenciales y devuelve { user, token }. El script de test guarda el token en la variable de colección {{token}}. El JWT vive exactamente 5 minutos.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"correo\": \"{{correo}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [
+        {
+          "name": "Ejemplo 200",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Valida credenciales y devuelve { user, token }. El script de test guarda el token en la variable de colección {{token}}. El JWT vive exactamente 5 minutos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ],
+          "body": "{\n  \"mensaje\": \"Inicio de sesión exitoso\",\n  \"user\": {\n    \"id\": \"665f1b2c8e4a3a0012345678\",\n    \"nombreCompleto\": \"Administrador TecnoStore\",\n    \"correo\": \"admin@tecnostore.com\",\n    \"rol\": \"admin\"\n  },\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.<payload id/email/role + exp>.<firma>\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Endpoint protegido con token válido (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Acceso permitido: 200', () => pm.response.to.have.status(200));",
+              "pm.test('Devuelve el usuario autenticado', () => pm.expect(pm.response.json().user).to.have.property('correo'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        },
+        "description": "Envía Authorization: Bearer {{token}}. Ejecutar justo después del login (dentro de los 5 minutos)."
+      },
+      "response": [
+        {
+          "name": "Ejemplo 200",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Envía Authorization: Bearer {{token}}. Ejecutar justo después del login (dentro de los 5 minutos)."
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ],
+          "body": "{\n  \"user\": {\n    \"id\": \"665f1b2c8e4a3a0012345678\",\n    \"nombreCompleto\": \"Administrador TecnoStore\",\n    \"correo\": \"admin@tecnostore.com\",\n    \"rol\": \"admin\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Token vencido tras 5 minutos (401 token_expired)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+              "pm.test('error = token_expired', () => pm.expect(pm.response.json().error).to.eql('token_expired'));",
+              "pm.test('Mensaje descriptivo', () => pm.expect(pm.response.json().message).to.eql('La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente.'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        },
+        "description": "MISMA petición que la 2, pero ejecutada DESPUÉS de dejar pasar 5 minutos desde el login (ver variable token_emitido_a_las). El middleware responde 401 con { error: 'token_expired', message }."
+      },
+      "response": [
+        {
+          "name": "Ejemplo 401",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "MISMA petición que la 2, pero ejecutada DESPUÉS de dejar pasar 5 minutos desde el login (ver variable token_emitido_a_las). El middleware responde 401 con { error: 'token_expired', message }."
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ],
+          "body": "{\n  \"error\": \"token_expired\",\n  \"message\": \"La sesión ha expirado o ya no es válida. Por favor, inicie sesión nuevamente.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Sin cabecera Authorization (401 token_missing)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+              "pm.test('error = token_missing', () => pm.expect(pm.response.json().error).to.eql('token_missing'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        },
+        "description": "Petición sin token: el middleware responde 401."
+      },
+      "response": [
+        {
+          "name": "Ejemplo 401",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Petición sin token: el middleware responde 401."
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ],
+          "body": "{\n  \"error\": \"token_missing\",\n  \"message\": \"No autenticado: falta el token de acceso (Authorization: Bearer <token>).\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Crear producto (ruta protegida, solo admin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Producto creado: 201', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/productos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "productos"
+          ]
+        },
+        "description": "POST protegido por JWT + rol admin. Con token vencido responde el mismo 401 token_expired.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Monitor 27\\\"\",\n  \"categoria\": \"Monitores\",\n  \"marca\": \"ViewMax\",\n  \"precio\": 1800,\n  \"disponibilidad\": \"En stock\",\n  \"imagenColor\": \"#7c8cf8\",\n  \"descripcion\": \"Monitor 4K IPS.\",\n  \"caracteristicas\": [\n    \"4K\",\n    \"IPS\"\n  ],\n  \"colores\": [\n    \"Negro\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    }
+  ]
+}

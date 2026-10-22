@@ -1,5 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react'
-import { authApi } from '../services/api.js'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react'
+import { useNavigate } from 'react-router-dom'
+import { authApi, configurarClienteHttp } from '../services/api.js'
 
 // ---------------------------------------------------------------------------
 // Estado global de autenticación: Context API + useReducer (Opción A)
@@ -77,27 +87,58 @@ const AuthDispatchContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [estado, dispatch] = useReducer(authReducer, undefined, leerSesionGuardada)
+  const navigate = useNavigate()
 
   // Persistir cada cambio de sesión
   useEffect(() => {
     guardarSesion(estado)
   }, [estado])
 
+  // Referencia al token vigente: el cliente HTTP (services/api.js) la lee en cada
+  // petición para adjuntar "Authorization: Bearer <token>".
+  const tokenRef = useRef(estado.token)
+  tokenRef.current = estado.token
+
+  // Conecta el cliente HTTP con el estado global. Es un layout effect para que
+  // quede registrado ANTES de los useEffect de las páginas que piden datos.
+  useLayoutEffect(() => {
+    configurarClienteHttp({
+      getToken: () => tokenRef.current,
+
+      // Interceptor de sesión expirada: se ejecuta cuando la API responde 401
+      // a una petición que llevaba token (el JWT de 5 minutos ya caducó).
+      onSesionExpirada: () => {
+        // Varias peticiones pueden fallar a la vez: solo se procesa la primera.
+        if (!tokenRef.current) return
+        tokenRef.current = null
+
+        // 1) Elimina token y datos del usuario (reducer + localStorage) -> LOGOUT
+        dispatch({ type: ACCIONES.LOGOUT })
+
+        // 2) Redirige a /login con el aviso; "desde" permite volver a la página
+        //    donde estaba el usuario después de iniciar sesión de nuevo.
+        const desde = window.location.pathname
+        navigate('/login', {
+          replace: true,
+          state: { sesionExpirada: true, desde: desde === '/login' ? undefined : desde },
+        })
+      },
+    })
+  }, [navigate])
+
   // Al abrir la app con una sesión guardada, se valida el token contra la API
-  // y se refrescan los datos del usuario desde MongoDB. Si el token ya no sirve
-  // (expiró, el usuario fue eliminado...) se cierra la sesión.
+  // y se refrescan los datos del usuario desde MongoDB. Si el token ya expiró,
+  // el interceptor del cliente HTTP cierra la sesión y redirige al login.
   const tokenGuardado = estado.token
   useEffect(() => {
     if (!tokenGuardado) return undefined
     const controlador = new AbortController()
 
     authApi
-      .me(tokenGuardado, controlador.signal)
+      .me(controlador.signal)
       .then(({ user }) => dispatch({ type: ACCIONES.UPDATE_USER, payload: user }))
-      .catch((error) => {
-        if (error.name === 'AbortError') return
-        if (error.status === 401) dispatch({ type: ACCIONES.LOGOUT })
-        // Si es un error de red se conserva la sesión guardada
+      .catch(() => {
+        // 401 -> ya lo gestionó el interceptor. Error de red -> se conserva la sesión.
       })
 
     return () => controlador.abort()

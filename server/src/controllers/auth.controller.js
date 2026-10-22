@@ -2,10 +2,15 @@ import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
 import { asyncHandler, HttpError } from '../utils/asyncHandler.js'
 
-const firmarToken = (usuario) =>
-  jwt.sign({ id: usuario._id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  })
+// Firma el JWT con la clave secreta del servidor (JWT_SECRET, solo en .env).
+// Payload: identidad mínima del usuario (id, email, role).
+// Expiración estricta: JWT_EXPIRES_IN (en .env), por defecto exactamente 5 minutos.
+export const firmarToken = (usuario) =>
+  jwt.sign(
+    { id: usuario._id, email: usuario.correo, role: usuario.rol },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '5m' },
+  )
 
 // POST /api/auth/register
 // Crea un usuario nuevo. El rol SIEMPRE es "cliente": nunca se acepta el rol
